@@ -1,0 +1,15 @@
+{
+  "name": "trafex",
+  "owner": {
+    "name": "Tim de Pater"
+  },
+  "description": "TrafeX's general skills for Claude Code.",
+  "plugins": [
+    {
+      "name": "trafex",
+      "source": "./plugins/trafex",
+      "description": "One way of working for every change to a repo: worktree, grilling, test-first build, three-axis code review and a PR.",
+      "category": "engineering"
+    }
+  ]
+}
