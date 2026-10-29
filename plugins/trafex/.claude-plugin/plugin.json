@@ -1,6 +1,6 @@
 {
   "name": "trafex",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "One way of working for every change to a repo: worktree, grilling, test-first build, three-axis code review and a PR.",
   "author": {
     "name": "Tim de Pater"
