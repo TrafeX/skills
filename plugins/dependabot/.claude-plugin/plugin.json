@@ -1,6 +1,6 @@
 {
   "name": "dependabot",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Weekly triage of open Dependabot PRs across all your GitHub repos: inventory, risk tiers, then mass-merge or mass-ignore whole groups behind green CI.",
   "author": {
     "name": "Tim de Pater"

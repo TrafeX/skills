@@ -99,6 +99,10 @@ gh pr view "$NUM" --repo "$REPO" --json number,mergeable,mergeStateStatus,status
 ```
 - `CLEAN` / all checks `SUCCESS` (or `none`) → safe to merge.
 - `UNSTABLE` or any `FAILURE` → **skip**, report it, offer to investigate (Step 6).
+- `BEHIND` (base moved on, branch protection wants it up to date) or `DIRTY`
+  (merge conflict) → don't skip silently: have Dependabot rebase it (Step 5a).
+  This happens often after you merge one PR and a sibling PR in the same repo
+  falls behind or conflicts on the lock file.
 
 **Merge** (Dependabot branches are single-commit; try squash, fall back):
 ```sh
@@ -120,6 +124,59 @@ merge_pr() {  # merge_pr <repo> <num>
 
 Post via `gh pr comment "$NUM" --repo "$REPO" --body "@dependabot ..."`.
 
+## Step 5a — Rebase, wait for it, wait for CI, then ask
+
+Never push to a Dependabot branch yourself: Dependabot stops updating a PR once
+someone else commits to it. Let Dependabot do the rebase, and don't leave the
+user to check back on it — watch it until there is a verdict.
+
+1. **Record the current head**, then ask for the rebase:
+   ```sh
+   OLD=$(gh pr view "$NUM" --repo "$REPO" --json headRefOid --jq .headRefOid)
+   gh pr comment "$NUM" --repo "$REPO" --body "@dependabot rebase"
+   ```
+   (Use `@dependabot recreate` instead only when the user agrees to drop edits
+   someone else made to the branch — Dependabot refuses to rebase those.)
+   Dependabot also rebases on its own after a sibling merge sometimes; then skip
+   the comment and just watch with the current head as `OLD`.
+
+2. **Watch it in the background.** Run this with `run_in_background` (one call
+   per PR, so several rebases run side by side); the harness wakes you when it
+   exits, so do not poll in between. Carry on with the rest of the batch meanwhile.
+   ```sh
+   await_rebase() {  # await_rebase <repo> <num> <old-head-sha>
+     local deadline=$(( $(date +%s) + 1800 )) state sha
+     while :; do  # 1. wait until Dependabot has pushed a new head
+       read -r state sha <<<"$(gh pr view "$2" --repo "$1" --json state,headRefOid \
+         --jq '"\(.state) \(.headRefOid)"')"
+       [[ $state != OPEN ]] && { echo "STOPPED $1 #$2 is $state"; return 1; }
+       [[ $sha != "$3" ]] && break
+       (( $(date +%s) > deadline )) && { echo "TIMEOUT $1 #$2 not rebased in 30 min"; return 2; }
+       sleep 30
+     done
+     sleep 30  # 2. give the workflows time to register on the new head
+     gh pr checks "$2" --repo "$1" --watch --interval 30 >/dev/null 2>&1
+     gh pr view "$2" --repo "$1" --json mergeStateStatus,statusCheckRollup \
+       --jq '"DONE '"$1 #$2"' \(.mergeStateStatus) " + ([.statusCheckRollup[]?|.conclusion//.state]|join(","))'
+   }
+   ```
+   - `STOPPED` → the PR was closed or merged meanwhile (often superseded by a
+     newer Dependabot PR); report it, nothing left to do.
+   - `TIMEOUT` → read Dependabot's last comment on the PR
+     (`gh pr view "$NUM" --repo "$REPO" --comments`) to see why it didn't
+     rebase, and report that.
+   - `DONE` → the rebase landed and CI has finished; go to 3.
+
+3. **Ask the user what to do**, per PR, with AskUserQuestion. Put the PR, the
+   update and the CI outcome in the question itself. Options:
+   - green (`CLEAN`, all `SUCCESS`): **Merge (Recommended)** / Ignore / Leave open
+   - red: **Investigate the failure (Recommended)** (Step 6) / Ignore / Leave open
+   - still `BEHIND`/`DIRTY` (base moved again during the wait): Rebase again /
+     Leave open
+
+   Merge with `merge_pr`, ignore with the commands below. Don't merge on a
+   verdict from before the rebase: only the `DONE` line counts.
+
 ## Step 6 — (Optional) Investigate a red CI failure
 
 ```sh
@@ -132,5 +189,5 @@ a fix, but don't push without the user's go-ahead.
 
 ## Final report
 
-Summarize: merged (with count), ignored/closed, skipped-for-CI (with reason), and
-what was left open per the user's choices.
+Summarize: merged (with count), ignored/closed, rebased (with outcome), skipped-for-CI
+(with reason), and what was left open per the user's choices.
