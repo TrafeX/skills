@@ -10,6 +10,12 @@
       "source": "./plugins/trafex",
       "description": "One way of working for every change to a repo: worktree, grilling, test-first build, three-axis code review and a PR.",
       "category": "engineering"
+    },
+    {
+      "name": "dependabot",
+      "source": "./plugins/dependabot",
+      "description": "Weekly triage of open Dependabot PRs across all your GitHub repos: inventory, risk tiers, then mass-merge or mass-ignore whole groups behind green CI.",
+      "category": "engineering"
     }
   ]
 }
