@@ -1,0 +1,11 @@
+{
+  "name": "preview",
+  "version": "0.1.0",
+  "description": "Serve the app of a git worktree on the tailnet over HTTPS, so you can test work in progress from your phone. Docker Compose stacks or plain commands like npm run dev.",
+  "author": {
+    "name": "Tim de Pater"
+  },
+  "skills": [
+    "./skills/serve"
+  ]
+}
