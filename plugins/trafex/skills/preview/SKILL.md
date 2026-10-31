@@ -1,9 +1,9 @@
 ---
-name: serve
+name: preview
 description: "Runs the app of the current git worktree on its own port and serves it on the tailnet over HTTPS, so the developer can test work in progress from their phone. Handles Docker Compose stacks (isolated per worktree: own project name, own volumes, no clashing host ports) and plain commands like `npm run dev`. Use when the developer asks for a preview, a link to test on their phone, to start, stop or list previews, or to see the intermediate result of a worktree."
 ---
 
-# serve
+# preview
 
 `<script>` is `preview.sh` in this skill's base directory. It does all the mechanics; this skill decides what to run. Run every command from inside the worktree to preview (the one you are working in, unless the developer names another).
 
@@ -48,7 +48,7 @@ On the phone, the tailnet needs the Tailscale app, logged in to the same account
 ```markdown
 # preview
 
-Settings for the `preview:serve` skill.
+Settings for the `trafex:preview` skill.
 
 - Kind: compose
 - Service: `web`, port `80`

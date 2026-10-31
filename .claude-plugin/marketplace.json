@@ -8,19 +8,13 @@
     {
       "name": "trafex",
       "source": "./plugins/trafex",
-      "description": "One way of working for every change to a repo: worktree, grilling, test-first build, three-axis code review and a PR.",
+      "description": "One way of working for every change to a repo: worktree, grilling, test-first build, three-axis code review and a PR; plus previews of a worktree on your phone over the tailnet.",
       "category": "engineering"
     },
     {
       "name": "dependabot",
       "source": "./plugins/dependabot",
       "description": "Weekly triage of open Dependabot PRs across all your GitHub repos: inventory, risk tiers, then mass-merge or mass-ignore whole groups behind green CI.",
-      "category": "engineering"
-    },
-    {
-      "name": "preview",
-      "source": "./plugins/preview",
-      "description": "Serve the app of a git worktree on the tailnet over HTTPS, so you can test work in progress from your phone.",
       "category": "engineering"
     }
   ]

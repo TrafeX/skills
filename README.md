@@ -5,8 +5,8 @@ TrafeX's general skills for Claude Code, as a plugin marketplace.
 | Plugin       | Skill                          | What it does                                                                                                                         |
 | ------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `trafex`     | `trafex:implement`             | One way of working for every change to a repo: worktree, grilling, test-first build, three-axis code review and a PR.                |
+| `trafex`     | `trafex:preview`               | Serves a worktree's app (Docker Compose or a command like `npm run dev`) on your tailnet over HTTPS, to test work in progress from your phone. |
 | `dependabot` | `dependabot:triage`            | Weekly triage of open Dependabot PRs across all your GitHub repos: risk tiers, then mass-merge or mass-ignore groups behind green CI. |
-| `preview`    | `preview:serve`                | Serves a worktree's app (Docker Compose or a command like `npm run dev`) on your tailnet over HTTPS, to test work in progress from your phone. |
 
 Each plugin installs on its own; a plugin brings all of its skills.
 
@@ -18,7 +18,6 @@ From a local clone:
 /plugin marketplace add ~/Projects/skills
 /plugin install trafex@trafex
 /plugin install dependabot@trafex
-/plugin install preview@trafex
 ```
 
 From GitHub, or for everyone who opens a project, in that project's `.claude/settings.json`:
@@ -28,7 +27,7 @@ From GitHub, or for everyone who opens a project, in that project's `.claude/set
   "extraKnownMarketplaces": {
     "trafex": { "source": { "source": "github", "repo": "TrafeX/skills" } }
   },
-  "enabledPlugins": { "trafex@trafex": true, "dependabot@trafex": true, "preview@trafex": true }
+  "enabledPlugins": { "trafex@trafex": true, "dependabot@trafex": true }
 }
 ```
 
@@ -42,9 +41,9 @@ The skill reads the repo's `docs/agents/implement.md` for everything that differ
 
 It also expects `docs/agents/issue-tracker.md`, as Matt Pocock's skills do (`/setup-matt-pocock-skills` writes it).
 
-## Using `preview:serve`
+## Using `trafex:preview`
 
-Needs Tailscale on the laptop and on the phone (same account), with "HTTPS Certificates" turned on at https://login.tailscale.com/admin/dns, once `sudo tailscale set --operator=$USER` so `tailscale serve` runs without root, and Shields Up off on the laptop (`tailscale set --shields-up=false`), since it also blocks `tailscale serve`. Previews get a port in 4000–4999, so a tailnet policy only has to let the phone reach the laptop on `tcp:4000-4999`. Per repo, `docs/agents/preview.md` says how to run the app; the format is in `plugins/preview/skills/serve/SKILL.md`, and the skill proposes the file when it is missing.
+Needs Tailscale on the laptop and on the phone (same account), with "HTTPS Certificates" turned on at https://login.tailscale.com/admin/dns, once `sudo tailscale set --operator=$USER` so `tailscale serve` runs without root, and Shields Up off on the laptop (`tailscale set --shields-up=false`), since it also blocks `tailscale serve`. Previews get a port in 4000–4999, so a tailnet policy only has to let the phone reach the laptop on `tcp:4000-4999`. Per repo, `docs/agents/preview.md` says how to run the app; the format is in `plugins/trafex/skills/preview/SKILL.md`, and the skill proposes the file when it is missing.
 
 ## Vendored upstream skills
 
