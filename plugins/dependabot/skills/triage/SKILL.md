@@ -1,5 +1,5 @@
 ---
-name: dependabot-triage
+name: triage
 description: Weekly triage of open Dependabot PRs across all your GitHub repos. Fetches every open Dependabot PR, inventories the changes (expanding grouped updates), classifies them by risk tier, presents a summary, then lets you mass-merge or mass-ignore whole groups — gating merges on green CI. Use when the user wants to review/merge/ignore Dependabot dependency-update PRs, do a dependency-update sweep, or "check my Dependabot PRs".
 ---
 

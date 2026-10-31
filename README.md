@@ -5,7 +5,7 @@ TrafeX's general skills for Claude Code, as a plugin marketplace.
 | Plugin       | Skill                          | What it does                                                                                                                         |
 | ------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `trafex`     | `trafex:implement`             | One way of working for every change to a repo: worktree, grilling, test-first build, three-axis code review and a PR.                |
-| `dependabot` | `dependabot:dependabot-triage` | Weekly triage of open Dependabot PRs across all your GitHub repos: risk tiers, then mass-merge or mass-ignore groups behind green CI. |
+| `dependabot` | `dependabot:triage`            | Weekly triage of open Dependabot PRs across all your GitHub repos: risk tiers, then mass-merge or mass-ignore groups behind green CI. |
 
 Each plugin installs on its own; a plugin brings all of its skills.
 
