@@ -28,6 +28,10 @@ Settings for the `trafex:implement` skill.
 
 Every line is optional except the remote, the base branch and the full checks. Leave out what the repo does not have: without a seams line the seams come from `tdd` alone, without external APIs the Correctness brief names none.
 
+## Issue tracker
+
+Next to the settings, the repo has `docs/agents/issue-tracker.md`, as Matt Pocock's skills expect (`/setup-matt-pocock-skills` writes it). It says which tracker holds the specs and tickets and how to read, create and link issues there. Repos whose tracker is GitHub Issues publish the tickets of the large route with this plugin's `scripts/publish-tickets` (see [LARGE.md](LARGE.md) step 2), not with the `gh` commands that file describes.
+
 ## When the file is missing
 
 Before step 1, propose the values from the repo itself: `git remote -v` and the default branch for the remote and base branch, the package manifest or Makefile for the commands, and the files that exist for the conventions, glossary and ADRs. Show the proposal to the developer and let them correct it. Use the confirmed values for this change, and after step 2 write them to `docs/agents/implement.md` in the new worktree, so the file travels with the change in its PR.

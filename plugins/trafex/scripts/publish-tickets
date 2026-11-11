@@ -1,0 +1,341 @@
+#!/usr/bin/env python3
+"""Publish a directory of tickets as GitHub sub-issues of a spec issue.
+
+Usage: publish-tickets <dir> --repo <owner/name> --spec <number>
+                       [--label ready-for-agent] [--dry-run]
+
+<dir> holds one file per ticket, named NN-slug.md:
+
+    ---
+    title: Show the portfolio total
+    blocked_by: [01, 02]
+    ---
+    ## Parent
+    ...
+
+The script first validates every file (titles present and unique, blocked_by
+pointing at existing NN, no cycles), then, in dependency order: creates each
+issue as a sub-issue of the spec with the label (one GraphQL call, so a
+failure never leaves an issue outside the spec), then adds the blocked_by
+dependencies on the real issue ids. A ticket whose title already is a
+sub-issue of the spec is reused, not created again, so a second run resumes
+where a first one stopped; dependencies it finds that no file lists are
+reported, not removed. It prints a table NN -> #issue -> blocked by.
+
+All GitHub calls go through `gh api`, with JSON on stdin; no shell is involved.
+Needs only Python 3 and an authenticated `gh`.
+"""
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+FILE_RE = re.compile(r"^(\d+)-[^/]+\.md$")
+KEYS = {"title", "blocked_by"}
+
+
+class Fail(Exception):
+    pass
+
+
+# ---------- ticket files ----------
+
+
+def parse_scalar(raw):
+    raw = raw.strip()
+    if raw.startswith('"'):
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            raise ValueError(f"bad double-quoted string: {raw}")
+    if raw.startswith("'"):
+        if len(raw) < 2 or not raw.endswith("'"):
+            raise ValueError(f"bad single-quoted string: {raw}")
+        return raw[1:-1].replace("''", "'")
+    return raw
+
+
+def parse_number(raw):
+    raw = str(parse_scalar(str(raw)))
+    if not re.fullmatch(r"\d+", raw):
+        raise ValueError(f"not a ticket number: {raw!r}")
+    return int(raw)
+
+
+def parse_ticket(path):
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        raise ValueError("does not start with a --- frontmatter line")
+    try:
+        end = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
+    except StopIteration:
+        raise ValueError("frontmatter has no closing --- line")
+
+    fields = {}
+    current_list = None
+    for line in lines[1:end]:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        item = re.match(r"^\s+-\s*(.*)$", line) or re.match(r"^-\s+(.*)$", line)
+        if item and current_list is not None:
+            fields[current_list].append(parse_number(item.group(1)))
+            continue
+        m = re.match(r"^([A-Za-z_][\w-]*)\s*:\s*(.*)$", line)
+        if not m:
+            raise ValueError(f"cannot read frontmatter line: {line!r}")
+        key, value = m.group(1), m.group(2).strip()
+        if key not in KEYS:
+            raise ValueError(f"unknown frontmatter key {key!r} (expected: title, blocked_by)")
+        if key in fields:
+            raise ValueError(f"frontmatter key {key!r} appears twice")
+        current_list = None
+        if key == "title":
+            fields["title"] = str(parse_scalar(value)).strip() if value else ""
+        else:
+            if value == "":
+                fields["blocked_by"] = []
+                current_list = "blocked_by"
+            elif value.startswith("[") and value.endswith("]"):
+                inner = value[1:-1].strip()
+                fields["blocked_by"] = [parse_number(x) for x in inner.split(",")] if inner else []
+            else:
+                raise ValueError(f"blocked_by must be a list like [01, 02], got {value!r}")
+
+    body = "\n".join(lines[end + 1:]).strip() + "\n"
+    return fields.get("title", ""), fields.get("blocked_by", []), body
+
+
+def load_tickets(directory):
+    errors = []
+    tickets = {}
+    files = sorted(p for p in directory.iterdir() if p.is_file() and p.suffix == ".md")
+    if not files:
+        raise Fail(f"no .md files in {directory}")
+    for path in files:
+        m = FILE_RE.match(path.name)
+        if not m:
+            errors.append(f"{path.name}: name must be NN-slug.md")
+            continue
+        nn = int(m.group(1))
+        if nn in tickets:
+            errors.append(f"{path.name}: number {nn:02d} is also used by {tickets[nn]['file']}")
+            continue
+        try:
+            title, blocked_by, body = parse_ticket(path)
+        except ValueError as e:
+            errors.append(f"{path.name}: {e}")
+            continue
+        tickets[nn] = {"nn": nn, "file": path.name, "title": title,
+                       "blocked_by": blocked_by, "body": body}
+
+    titles = {}
+    for t in tickets.values():
+        if not t["title"]:
+            errors.append(f"{t['file']}: title is empty")
+        elif t["title"] in titles:
+            errors.append(f"{t['file']}: title {t['title']!r} is also used by {titles[t['title']]}")
+        else:
+            titles[t["title"]] = t["file"]
+        if not t["body"].strip():
+            errors.append(f"{t['file']}: body is empty")
+        if len(set(t["blocked_by"])) != len(t["blocked_by"]):
+            errors.append(f"{t['file']}: blocked_by lists a ticket twice")
+        for b in t["blocked_by"]:
+            if b == t["nn"]:
+                errors.append(f"{t['file']}: blocked_by lists the ticket itself")
+            elif b not in tickets:
+                errors.append(f"{t['file']}: blocked_by {b:02d} is not a ticket in {directory}")
+    if errors:
+        raise Fail("invalid tickets:\n  " + "\n  ".join(errors))
+    return tickets, topo_order(tickets)
+
+
+def topo_order(tickets):
+    """Blockers first; ties by NN. Raises on a cycle."""
+    remaining = {nn: set(t["blocked_by"]) for nn, t in tickets.items()}
+    order = []
+    while remaining:
+        ready = sorted(nn for nn, deps in remaining.items() if not deps)
+        if not ready:
+            cycle = ", ".join(f"{nn:02d}" for nn in sorted(remaining))
+            raise Fail(f"invalid tickets:\n  blocked_by has a cycle among {cycle}")
+        for nn in ready:
+            order.append(nn)
+            del remaining[nn]
+        for deps in remaining.values():
+            deps.difference_update(ready)
+    return order
+
+
+# ---------- GitHub ----------
+
+
+def gh_api(path, method="GET", data=None, paginate=False):
+    cmd = ["gh", "api", path, "--method", method,
+           "-H", "Accept: application/vnd.github+json",
+           "-H", "X-GitHub-Api-Version: 2022-11-28"]
+    if paginate:
+        cmd += ["--paginate", "--slurp"]
+    if data is not None:
+        cmd += ["--input", "-"]
+    try:
+        proc = subprocess.run(cmd, input=json.dumps(data) if data is not None else None,
+                              capture_output=True, text=True)
+    except FileNotFoundError:
+        raise Fail("gh is not installed or not on PATH")
+    if proc.returncode != 0:
+        msg = (proc.stderr.strip() or proc.stdout.strip() or f"exit {proc.returncode}")
+        raise Fail(f"gh api {method} {path} failed: {msg}")
+    out = json.loads(proc.stdout) if proc.stdout.strip() else None
+    if paginate:
+        return [item for page in (out or []) for item in page]
+    return out
+
+
+def existing_sub_issues(repo, spec):
+    by_title = {}
+    for issue in gh_api(f"repos/{repo}/issues/{spec}/sub_issues?per_page=100", paginate=True):
+        title = issue["title"].strip()
+        if title in by_title:
+            raise Fail(f"spec #{spec} has two sub-issues titled {title!r} "
+                       f"(#{by_title[title]['number']} and #{issue['number']}); resolve that first")
+        by_title[title] = issue
+    return by_title
+
+
+def gh_graphql(query, variables):
+    """A GraphQL call; GitHub errors (also with exit 0) become a Fail."""
+    out = gh_api("graphql", "POST", {"query": query, "variables": variables})
+    if out.get("errors"):
+        raise Fail("gh api graphql failed: " + "; ".join(e.get("message", str(e)) for e in out["errors"]))
+    return out["data"]
+
+
+def check_remote(repo, spec, label):
+    """The node ids createIssue needs; fails early on a wrong spec or label."""
+    owner, name = repo.split("/")
+    data = gh_graphql(
+        """query($owner: String!, $name: String!, $spec: Int!, $label: String!) {
+             repository(owner: $owner, name: $name) {
+               id
+               issueOrPullRequest(number: $spec) { __typename ... on Issue { id } }
+               label(name: $label) { id }
+             }
+           }""",
+        {"owner": owner, "name": name, "spec": spec, "label": label or "-"})
+    r = data.get("repository")
+    if not r:
+        raise Fail(f"repository {repo} not found")
+    target = r.get("issueOrPullRequest")
+    if not target:
+        raise Fail(f"#{spec} does not exist in {repo}")
+    if target["__typename"] != "Issue":
+        raise Fail(f"#{spec} in {repo} is a pull request, not an issue")
+    if label and not r.get("label"):
+        raise Fail(f"label {label!r} does not exist in {repo}; create it "
+                   f"or pass --label '' to publish without one")
+    return {"repo": r["id"], "spec": target["id"], "label": r["label"]["id"] if label else None}
+
+
+def create_sub_issue(ids, title, body):
+    """Create the issue already linked to the spec and labelled, in one call,
+    so a failure never leaves an issue outside the spec (which a rerun would
+    not see and create again)."""
+    data = gh_graphql(
+        """mutation($input: CreateIssueInput!) {
+             createIssue(input: $input) { issue { number fullDatabaseId } }
+           }""",
+        {"input": {"repositoryId": ids["repo"], "parentIssueId": ids["spec"], "title": title,
+                   "body": body, "labelIds": [ids["label"]] if ids["label"] else []}})
+    issue = data["createIssue"]["issue"]
+    return {"number": issue["number"], "id": int(issue["fullDatabaseId"])}
+
+
+# ---------- main ----------
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Publish ticket files as GitHub sub-issues of a spec issue.")
+    ap.add_argument("dir", type=Path, help="directory with one NN-slug.md file per ticket")
+    ap.add_argument("--repo", required=True, help="owner/name")
+    ap.add_argument("--spec", required=True, type=int, help="number of the spec issue")
+    ap.add_argument("--label", default="ready-for-agent", help="label for every ticket ('' for none)")
+    ap.add_argument("--dry-run", action="store_true", help="validate and show the plan, change nothing")
+    args = ap.parse_args()
+
+    if not args.dir.is_dir():
+        raise Fail(f"{args.dir} is not a directory")
+    if not re.fullmatch(r"[\w.-]+/[\w.-]+", args.repo):
+        raise Fail(f"--repo must be owner/name, got {args.repo!r}")
+
+    tickets, order = load_tickets(args.dir)
+    repo, spec, label = args.repo, args.spec, args.label
+
+    ids = check_remote(repo, spec, label)
+    existing = existing_sub_issues(repo, spec)
+
+    issues = {}  # nn -> {"number", "id", "status"}
+    for nn in order:
+        t = tickets[nn]
+        found = existing.get(t["title"])
+        if found:
+            issues[nn] = {"number": found["number"], "id": found["id"], "status": "exists"}
+            if label and label not in {l["name"] for l in found.get("labels", [])} and not args.dry_run:
+                gh_api(f"repos/{repo}/issues/{found['number']}/labels", "POST", {"labels": [label]})
+            continue
+        if args.dry_run:
+            issues[nn] = {"number": None, "id": None, "status": "would create"}
+            continue
+        created = create_sub_issue(ids, t["title"], t["body"])
+        issues[nn] = {**created, "status": "created"}
+
+    warnings = []
+    for nn in order:
+        t, issue = tickets[nn], issues[nn]
+        if issue["number"] is None:
+            continue  # dry run: not created yet, so nothing to compare
+        if issue["status"] == "created" and not t["blocked_by"]:
+            continue  # a new issue has no dependencies yet
+        deps_path = f"repos/{repo}/issues/{issue['number']}/dependencies/blocked_by"
+        current_ids = {c["id"]: c["number"] for c in
+                       gh_api(f"{deps_path}?per_page=100", paginate=True)}
+        wanted_ids = {issues[b]["id"] for b in t["blocked_by"] if issues[b]["id"] is not None}
+        missing = wanted_ids - current_ids.keys()
+        for blocker_id in missing:
+            if not args.dry_run:
+                gh_api(deps_path, "POST", {"issue_id": blocker_id})
+        if missing and issue["status"] == "exists":
+            verb = "would add" if args.dry_run else "added"
+            issue["status"] += f", {verb} {len(missing)} blocked_by"
+        for extra_id in current_ids.keys() - wanted_ids:
+            warnings.append(f"#{issue['number']} is also blocked by #{current_ids[extra_id]}, "
+                            f"which {t['file']} does not list; left as is")
+
+    def ref(nn):
+        n = issues[nn]["number"]
+        return f"#{n}" if n is not None else f"({nn:02d})"
+
+    if args.dry_run:
+        print(f"Dry run: nothing was changed in {repo}.\n")
+    print("| NN | Issue | Title | Blocked by | Status |")
+    print("| -- | ----- | ----- | ---------- | ------ |")
+    for nn in order:
+        t = tickets[nn]
+        blocked = ", ".join(ref(b) for b in t["blocked_by"]) or "-"
+        title = t["title"].replace("|", "\\|")
+        print(f"| {nn:02d} | {ref(nn)} | {title} | {blocked} | {issues[nn]['status']} |")
+    sys.stdout.flush()
+    for w in warnings:
+        print(f"\nwarning: {w}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Fail as e:
+        print(f"publish-tickets: {e}", file=sys.stderr)
+        sys.exit(1)

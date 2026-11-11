@@ -13,7 +13,11 @@ Follow `to-spec` with these deviations:
 
 Follow `to-tickets` with this deviation:
 
-- **`to-tickets`, step 5 (publish):** every ticket is a sub-issue of the spec issue, and blocking edges are the tracker's native issue dependencies, both as described in `docs/agents/issue-tracker.md`.
+- **`to-tickets`, step 5 (publish):** every ticket is a sub-issue of the spec issue, and blocking edges are the tracker's native issue dependencies, both as described in `docs/agents/issue-tracker.md`. When the tracker is GitHub Issues, the script `<scripts>/publish-tickets` does all of the publishing (`<scripts>` is `../../scripts`, relative to this skill's base directory; call it by its absolute path). Never write your own `gh` loop for this.
+  1. Write one file per approved ticket in a new, empty directory outside the worktree (the session's scratchpad): `NN-slug.md`, where `NN` is the ticket's number in the approved breakdown. The file starts with frontmatter, `title: <ticket title>` and `blocked_by: [NN, …]` (`[]` when nothing blocks it), and its body follows `to-tickets`' issue template: a `## Parent` section with `#<spec>`, and no `## Blocked by` section, since the script sets the edges natively.
+  2. `<scripts>/publish-tickets <dir> --repo <owner/name> --spec <spec> --dry-run`. It checks every file and the repo first and changes nothing. Fix what it reports in the files and run it again until it passes. When it reports that the `ready-for-agent` label is missing, ask the developer whether to create it (`gh label create ready-for-agent`).
+  3. Run the same command without `--dry-run`. It creates the issues in dependency order, each as a labelled sub-issue of the spec, adds the dependencies and prints a table `NN → #issue → blocked by`; show that table to the developer.
+  4. When a run stops on an error, fix the cause and run the same command again: tickets already under the spec are reused, not created twice. Do not create, link or delete issues by hand. A warning about a dependency that no file lists means the issue had it already; put it to the developer.
 
 ## 3. Implement
 
