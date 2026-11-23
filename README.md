@@ -47,7 +47,7 @@ Needs Tailscale on the laptop and on the phone (same account), with "HTTPS Certi
 
 ## Vendored upstream skills
 
-`plugins/trafex/upstream/mattpocock/` is copied unchanged from [mattpocock/skills](https://github.com/mattpocock/skills) **1.3.1** (MIT, see its `LICENSE`):
+`plugins/trafex/upstream/mattpocock/` is copied unchanged from [mattpocock/skills](https://github.com/mattpocock/skills) **1.3.2** (MIT, see its `LICENSE`):
 
 | Skill             | Upstream path                        |
 | ----------------- | ------------------------------------ |

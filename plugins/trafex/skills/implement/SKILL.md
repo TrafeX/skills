@@ -9,6 +9,8 @@ One way of working for every change to a repo. It chains Matt Pocock's skills, v
 
 **Upstream skills.** `<upstream>` is `../../upstream/mattpocock`, relative to this skill's base directory. Every upstream skill is read from `<upstream>/<name>/SKILL.md` and followed, never invoked with the Skill tool: that way the version pinned in this plugin is the one used, not a project copy or the `mattpocock-skills` plugin. Where an upstream skill says to call the Skill tool with a name, read `<upstream>/<name>/SKILL.md` instead. A sub-agent that has to follow an upstream skill gets its absolute path in its brief.
 
+**Sub-agents.** Every sub-agent in this flow starts with a fresh context window, as the upstream skills require for theirs: the ones this skill adds too (the Correctness reviewer, the fix subagent, the small route's implementer subagent). It works from its brief and the pointers in it, never from a copy of this conversation.
+
 **Project settings.** Everything that differs per repo lives in the repo's `docs/agents/implement.md`; this skill calls it _the settings_. Read it before step 1. When it is missing, see [SETTINGS.md](SETTINGS.md).
 
 **Vocabulary.** When the repo has a glossary (the settings name it), use its terms in everything you write, and follow the vocabulary notes in the settings. "Spec" and "ticket" here are issues in the repo's issue tracker, as in the upstream skills. The way of working itself adds no terms to the glossary.
