@@ -26,7 +26,7 @@ Run `git fetch <remote> --prune`. For every worktree under `<root>/.claude/workt
 1. Pick a branch name from the request as in the conventions the settings name. It can be renamed later with `git branch -m`.
 2. `git worktree add --no-track -b <branch> <root>/.claude/worktrees/<slug> <remote>/<base>`
 3. In the worktree: run the settings' install command.
-4. Work in that worktree for the rest of the flow. The developer's own checkout and any unfinished branch stay untouched.
+4. Work in that worktree for the rest of the flow. The developer's own checkout and any unfinished branch stay untouched, until they ask to look at the change locally ([PR.md](PR.md)).
 
 ## 3. Grill the change
 

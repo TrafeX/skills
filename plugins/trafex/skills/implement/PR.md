@@ -21,7 +21,7 @@ Read `../preview/SKILL.md`, relative to this skill's base directory, and follow 
 ### Locally
 
 1. Git refuses to check out a branch that another worktree holds, so free it: when `git -C <worktree> status --porcelain` is empty, `git worktree remove <worktree>` (the commits stay on the branch). Run that from `<root>`, not from inside the worktree. With uncommitted changes, stop and ask: they belong in a commit first.
-2. Tell the developer to run `git -C <root> switch <branch>` themselves, plus the settings' install command when the change touches dependencies. Do not switch their checkout for them: it may hold work of their own.
+2. Switch their checkout yourself: when `git -C <root> status --porcelain` is empty, note the branch it is on (`git -C <root> branch --show-current`), run `git -C <root> switch <branch>`, and run the settings' install command in `<root>` when the change touches dependencies. With uncommitted changes in their checkout, stop and ask: they are the developer's own work. Tell them the branch is checked out, and which branch they were on, so they can switch back.
 3. Wait until they report back. Fixes they ask for go on `<branch>` in their checkout, each as its own commit, followed by the settings' full checks; this is the only time the flow works outside a worktree. On the large route, push them (`git push <remote> <branch>`), since the draft PR already tracks the branch.
 4. Then continue below. Push and PR commands work from `<root>`, since the branch is a ref the checkouts share.
 
